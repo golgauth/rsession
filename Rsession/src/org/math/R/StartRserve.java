@@ -5,8 +5,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.rosuda.REngine.Rserve.RConnection;
 
 /** helper class that consumes output of a process. In addition, it filter output of the REG command on Windows to look for InstallPath registry entry which specifies the location of R. */
@@ -218,7 +216,10 @@ public class StartRserve {
 
     /** shortcut to <code>launchRserve(cmd, "--no-save --slave", "--no-save --slave", false)</code> */
     public static boolean launchRserve(String cmd) {
-        return launchRserve(cmd, /*null,*/ "--no-save --slave", "--no-save --slave", false);
+        StringBuffer RserveArgs = new StringBuffer("--no-save --slave ");      
+        if (!System.getProperty("os.name").contains("Win"))
+        	RserveArgs.append(" --RS-pidfile \\'" /*+ System.getProperty("user.dir")*/ + "/tmp" + "/rs_pid.pid\\'");
+        return launchRserve(cmd, /*null,*/ "--no-save --slave", RserveArgs.toString(), false);
     }
 
     /** attempt to start Rserve. Note: parameters are <b>not</b> quoted, so avoid using any quotes in arguments
@@ -229,7 +230,8 @@ public class StartRserve {
      */
     public static boolean launchRserve(String cmd, /*String libloc,*/ String rargs, String rsrvargs, boolean debug) {
         System.err.println("Waiting for Rserve to start ...");
-        boolean startRserve = doInR("library(" + /*(libloc != null ? "lib.loc='" + libloc + "'," : "") +*/ "Rserve);Rserve(" + (debug ? "TRUE" : "FALSE") + ",args='" + rsrvargs + "')", cmd, rargs, null, null);
+        //boolean startRserve = doInR("library(" + /*(libloc != null ? "lib.loc='" + libloc + "'," : "") +*/ "Rserve);Rserve(" + (debug ? "TRUE" : "FALSE") + ",args='" + rsrvargs + "')", cmd, rargs, null, null);
+        boolean startRserve = doInR("library(Rserve);Rserve(" + (debug ? "TRUE" : "FALSE") + ",args='" + rsrvargs + "')", cmd, rargs, null, null);
         if (startRserve) {
             System.err.println("Rserve startup done, let us try to connect ...");
         } else {
