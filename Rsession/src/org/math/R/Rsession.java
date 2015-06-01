@@ -1,10 +1,14 @@
 package org.math.R;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,6 +22,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.io.IOUtils;
 import org.rosuda.REngine.REXP;
 import org.rosuda.REngine.REXPDouble;
 import org.rosuda.REngine.REXPInteger;
@@ -2424,6 +2429,84 @@ public class Rsession implements Logger {
             }
         }
         log(IO_HEAD + "File " + remoteFile + " sent.", Level.INFO);
+    }
+    
+    /**
+     * Get file from R environment to user filesystem
+     *
+     * @param localfile local filesystem file
+     * @param remoteFile R environment file name
+     */
+    public void receiveFile_kktuax(File localfile, String remoteFile) {
+        try {
+            if (silentlyEval("file.exists('" + remoteFile + "')", TRY_MODE).asInteger() != 1) {
+                log(HEAD_ERROR + IO_HEAD + "file " + remoteFile + " not found.", Level.ERROR);
+            }
+        } catch (Exception ex) {
+            log(HEAD_ERROR + ex.getMessage() + "\n  getFile(File localfile=" + localfile.getAbsolutePath() + ", String remoteFile=" + remoteFile + ")", Level.ERROR);
+            return;
+        }
+        if (localfile.exists()) {
+            localfile.delete();
+            if (!localfile.exists()) {
+                log(IO_HEAD + "Local file " + localfile.getAbsolutePath() + " deleted.", Level.INFO);
+            } else {
+                log(HEAD_ERROR + IO_HEAD + "file " + localfile + " still exists !", Level.ERROR);
+                return;
+            }
+        }
+        InputStream is = null;
+        OutputStream os = null;
+        synchronized (connection) {
+            try {
+                is = connection.openFile(remoteFile);
+                os = new BufferedOutputStream(new FileOutputStream(localfile));
+                IOUtils.copy(is, os);
+                log(IO_HEAD + "File " + remoteFile + " received.", Level.INFO);
+                is.close();
+                os.close();
+            } catch (IOException e) {
+                log(HEAD_ERROR + IO_HEAD + connection.getLastError() + ": file " + remoteFile + " not transmitted.\n" + e.getMessage(), Level.ERROR);
+            } finally {
+                IOUtils.closeQuietly(is);
+                IOUtils.closeQuietly(os);
+            }
+        }
+    }
+
+    public void sendFile_kktuax(File localfile, String remoteFile) {
+        if (!localfile.exists()) {
+            synchronized (connection) {
+                log(HEAD_ERROR + IO_HEAD + connection.getLastError() + "\n  file " + localfile.getAbsolutePath() + " does not exists.", Level.ERROR);
+            }
+        }
+        try {
+            if (silentlyEval("file.exists('" + remoteFile + "')", TRY_MODE).asInteger() == 1) {
+                silentlyVoidEval("file.remove('" + remoteFile + "')", TRY_MODE);
+                log(IO_HEAD + "Remote file " + remoteFile + " deleted.", Level.INFO);
+            }
+        } catch (REXPMismatchException ex) {
+            log(HEAD_ERROR + ex.getMessage() + "\n  putFile(File localfile=" + localfile.getAbsolutePath() + ", String remoteFile=" + remoteFile + ")", Level.ERROR);
+            return;
+        }
+        InputStream is = null;
+        OutputStream os = null;
+        synchronized (connection) {
+            try {
+                os = connection.createFile(remoteFile);
+                is = new BufferedInputStream(new FileInputStream(localfile));
+                IOUtils.copy(is, os);
+                log(IO_HEAD + "File " + remoteFile + " sent.", Level.INFO);
+                is.close();
+                os.close();
+            } catch (IOException e) {
+                log(HEAD_ERROR + IO_HEAD + connection.getLastError() + ": file " + remoteFile + " not writable.\n" + e.getMessage(), Level.ERROR);
+            } finally {
+                IOUtils.closeQuietly(is);
+                IOUtils.closeQuietly(os);
+            }
+        }
+        
     }
 
     final static String testExpression = "1+pi";
